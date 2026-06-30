@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:somni_script_app/config/app_theme.dart';
 import 'package:somni_script_app/home_shell.dart';
 
@@ -16,14 +17,14 @@ void main() {
     ),
   );
 
-  runApp(const SomniScriptApp());
+  runApp(const ProviderScope(child: SomniScriptApp()));
 }
 
-class SomniScriptApp extends StatelessWidget {
+class SomniScriptApp extends ConsumerWidget {
   const SomniScriptApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'SomniScript',
       debugShowCheckedModeBanner: false,

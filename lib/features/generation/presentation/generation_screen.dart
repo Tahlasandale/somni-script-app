@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:somni_script_app/config/app_theme.dart';
+import 'package:somni_script_app/features/generation/presentation/generation_provider.dart';
 
 /// Onglet 1 : Générateur IA
 /// Zone de saisie textuelle, commutateur Histoire/Podcast,
 /// et console de logs asynchrones du pipeline multi-agents.
-class GenerationScreen extends StatefulWidget {
+class GenerationScreen extends ConsumerStatefulWidget {
   const GenerationScreen({super.key});
 
   @override
-  State<GenerationScreen> createState() => _GenerationScreenState();
+  ConsumerState<GenerationScreen> createState() => _GenerationScreenState();
 }
 
-class _GenerationScreenState extends State<GenerationScreen> {
+class _GenerationScreenState extends ConsumerState<GenerationScreen> {
   final _promptController = TextEditingController();
   bool _isPodcast = false;
-  bool _isGenerating = false;
 
   @override
   void dispose() {
@@ -24,11 +25,12 @@ class _GenerationScreenState extends State<GenerationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(generationProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Générer'),
         actions: [
-          // Commutateur Histoire / Podcast
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: SegmentedButton<bool>(
@@ -65,24 +67,26 @@ class _GenerationScreenState extends State<GenerationScreen> {
               width: double.infinity,
               height: 52,
               child: FilledButton.icon(
-                onPressed: _isGenerating ? null : _generate,
-                icon: _isGenerating
-                    ? const SizedBox(
+                onPressed: state.status == GenerationStatus.idle ||
+                        state.status == GenerationStatus.error
+                    ? _generate
+                    : null,
+                icon: state.status == GenerationStatus.idle ||
+                        state.status == GenerationStatus.error
+                    ? const Icon(Icons.auto_awesome)
+                    : const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome),
-                label: Text(_isGenerating
-                    ? 'Génération en cours…'
-                    : 'Générer'),
+                      ),
+                label: Text(_buttonLabel(state.status)),
               ),
             ),
           ),
 
           const SizedBox(height: 16),
 
-          // Console de logs (placeholder)
+          // Console de logs
           Expanded(
             child: Container(
               margin: const EdgeInsets.all(16),
@@ -91,15 +95,61 @@ class _GenerationScreenState extends State<GenerationScreen> {
                 color: AppTheme.surfaceCard,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Center(
-                child: Text(
-                  'Console de génération\n'
-                  '(Planification → Rédaction → Édition → Synthèse)',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 13,
-                  ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (state.error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          state.error!,
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    if (state.log.isNotEmpty)
+                      Text(
+                        state.log,
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                    if (state.log.isEmpty && state.error == null)
+                      const Center(
+                        child: Text(
+                          'Console de génération\n'
+                          '(Planification → Rédaction → Édition → Synthèse)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    if (state.result != null) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Script généré :',
+                        style: TextStyle(
+                          color: AppTheme.accentGreen,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        state.result!,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -109,11 +159,29 @@ class _GenerationScreenState extends State<GenerationScreen> {
     );
   }
 
+  String _buttonLabel(GenerationStatus status) {
+    switch (status) {
+      case GenerationStatus.planning:
+        return 'Planification…';
+      case GenerationStatus.writing:
+        return 'Rédaction…';
+      case GenerationStatus.editing:
+        return 'Édition…';
+      case GenerationStatus.done:
+        return 'Prêt ✓';
+      case GenerationStatus.error:
+        return 'Réessayer';
+      case GenerationStatus.idle:
+        return 'Générer';
+    }
+  }
+
   Future<void> _generate() async {
-    if (_promptController.text.trim().isEmpty) return;
-    setState(() => _isGenerating = true);
-    // TODO: Implémenter le pipeline multi-agents Gemini
-    await Future.delayed(const Duration(seconds: 2));
-    setState(() => _isGenerating = false);
+    final prompt = _promptController.text.trim();
+    if (prompt.isEmpty) return;
+    await ref.read(generationProvider.notifier).generate(
+          userPrompt: prompt,
+          isPodcast: _isPodcast,
+        );
   }
 }

@@ -1,16 +1,104 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:isar/isar.dart';
 import 'package:somni_script_app/config/app_theme.dart';
+import 'package:somni_script_app/core/db/app_models.dart';
+import 'package:somni_script_app/core/providers/secure_storage_provider.dart';
+import 'package:somni_script_app/core/providers/database_provider.dart';
 
 /// Onglet 3 : Bibliothèque & Paramètres
 /// Historique chronologique des sessions + configuration.
-class HistoryScreen extends StatefulWidget {
+class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _HistoryScreenState extends ConsumerState<HistoryScreen> {
+  final _apiKeyController = TextEditingController();
+  bool _obscured = true;
+  bool _isSaving = false;
+  List<MediaHistory> _history = [];
+  bool _isLoadingHistory = true;
+  StreamSubscription? _historySub;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApiKey();
+    _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _apiKeyController.dispose();
+    _historySub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadApiKey() async {
+    final storage = ref.read(secureStorageProvider);
+    final key = await storage.read(key: 'gemini_api_key');
+    if (mounted) {
+      setState(() {
+        _apiKeyController.text = key ?? '';
+      });
+    }
+  }
+
+  StreamSubscription<List<MediaHistory>> _watchHistory(Isar db) {
+    return db.mediaHistorys.where()
+      .sortByCreatedAtDesc()
+      .watch(fireImmediately: true)
+      .listen((results) {
+        if (mounted) {
+          setState(() {
+            _history = results;
+            _isLoadingHistory = false;
+          });
+        }
+      });
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final db = await ref.read(isarProvider.future);
+      _historySub = _watchHistory(db);
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
+  }
+
+  Future<void> _saveApiKey() async {
+    setState(() => _isSaving = true);
+    try {
+      final storage = ref.read(secureStorageProvider);
+      final key = _apiKeyController.text.trim();
+      if (key.isNotEmpty) {
+        await storage.write(key: 'gemini_api_key', value: key);
+      } else {
+        await storage.delete(key: 'gemini_api_key');
+      }
+      // Invalider le provider pour qu'il se rafraîchisse
+      ref.invalidate(geminiApiKeyProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clé API sauvegardée')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,14 +109,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           // --- Section API Key ---
-          const _SettingsSection(
+          _SettingsSection(
             title: 'Configuration',
-            child: _ApiKeyField(),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _apiKeyController,
+                    obscureText: _obscured,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Clé API Gemini',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscured ? Icons.visibility_off : Icons.visibility,
+                          size: 18,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscured = !_obscured),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.tonalIcon(
+                  onPressed: _isSaving ? null : _saveApiKey,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save, size: 18),
+                  label: Text(_isSaving ? '…' : 'Sauver'),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 16),
 
-          // --- Historique (placeholder) ---
+          // --- Historique ---
           const Text(
             'Historique',
             style: TextStyle(
@@ -39,32 +169,71 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
           const SizedBox(height: 8),
 
-          // Placeholder quand vide
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 48),
-            child: const Column(
-              children: [
-                Icon(
-                  Icons.history,
-                  size: 48,
-                  color: AppTheme.textSecondary,
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Aucune session pour le moment.\nGénère ton premier récit ou podcast !',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
+          if (_isLoadingHistory)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_history.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 48),
+              child: const Column(
+                children: [
+                  Icon(Icons.history, size: 48, color: AppTheme.textSecondary),
+                  SizedBox(height: 12),
+                  Text(
+                    'Aucune session pour le moment.\n'
+                    'Génère ton premier récit ou podcast !',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            )
+          else
+            ..._history.map((item) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(
+                      item.title,
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    subtitle: Text(
+                      '${item.mediaType == 'STORY' ? '📖' : '🎙️'}  '
+                      '${_formatDate(item.createdAt)}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.play_arrow,
+                          color: AppTheme.accentGreen),
+                      onPressed: () {
+                        // TODO: lancer la lecture depuis l'historique
+                      },
+                    ),
+                  ),
+                )),
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}/'
+        '${dt.month.toString().padLeft(2, '0')}/'
+        '${dt.year} ${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -72,10 +241,7 @@ class _SettingsSection extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _SettingsSection({
-    required this.title,
-    required this.child,
-  });
+  const _SettingsSection({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -92,64 +258,6 @@ class _SettingsSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Card(child: Padding(padding: const EdgeInsets.all(12), child: child)),
-      ],
-    );
-  }
-}
-
-class _ApiKeyField extends StatefulWidget {
-  const _ApiKeyField();
-
-  @override
-  State<_ApiKeyField> createState() => _ApiKeyFieldState();
-}
-
-class _ApiKeyFieldState extends State<_ApiKeyField> {
-  final _controller = TextEditingController();
-  bool _obscured = true;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: TextField(
-            controller: _controller,
-            obscureText: _obscured,
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 13,
-              fontFamily: 'monospace',
-            ),
-            decoration: InputDecoration(
-              hintText: 'Clé API Gemini',
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscured ? Icons.visibility_off : Icons.visibility,
-                  size: 18,
-                ),
-                onPressed: () => setState(() => _obscured = !_obscured),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        FilledButton.tonalIcon(
-          onPressed: () {},
-          icon: const Icon(Icons.save, size: 18),
-          label: const Text('Sauver'),
-        ),
       ],
     );
   }
