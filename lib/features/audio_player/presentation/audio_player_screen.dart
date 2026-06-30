@@ -102,11 +102,15 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _controlButton(Icons.skip_previous, () {}),
+              _controlButton(Icons.skip_previous, () {
+                audioService.skipPrevious();
+              }),
               const SizedBox(width: 16),
               _playButton(state),
               const SizedBox(width: 16),
-              _controlButton(Icons.skip_next, () {}),
+              _controlButton(Icons.skip_next, () {
+                audioService.skipNext();
+              }),
             ],
           ),
 

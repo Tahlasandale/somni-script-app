@@ -133,8 +133,8 @@ class GenerationNotifier extends StateNotifier<GenerationState> {
         ..mediaType = mediaType
         ..createdAt = DateTime.now();
       await db.writeTxn(() => db.mediaHistorys.put(history));
-    } catch (_) {
-      // Échec silencieux — ne pas bloquer l'utilisateur
+    } catch (e) {
+      print('⚠️ Échec sauvegarde session : $e');
     }
   }
 

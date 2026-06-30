@@ -22,7 +22,7 @@ class MediaHistory {
 
   late String title;
   late String userPrompt;
-  late String generatedPlanJson;
+  String generatedPlanJson = '';
   late String fullNarrativeText;
 
   @Index()
