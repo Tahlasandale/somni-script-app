@@ -1,31 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:somni_script_app/core/providers/navigation_provider.dart';
 import 'package:somni_script_app/features/generation/presentation/generation_screen.dart';
 import 'package:somni_script_app/features/audio_player/presentation/audio_player_screen.dart';
 import 'package:somni_script_app/features/history/presentation/history_screen.dart';
 
-class HomeShell extends StatefulWidget {
+class HomeShell extends ConsumerWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(tabIndexProvider);
 
-class _HomeShellState extends State<HomeShell> {
-  int _currentIndex = 0;
+    final screens = <Widget>[
+      const GenerationScreen(),
+      const AudioPlayerScreen(),
+      const HistoryScreen(),
+    ];
 
-  final List<Widget> _screens = const [
-    GenerationScreen(),
-    AudioPlayerScreen(),
-    HistoryScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: IndexedStack(index: currentIndex, children: screens),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        currentIndex: currentIndex,
+        onTap: (i) => ref.read(tabIndexProvider.notifier).state = i,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.auto_awesome),

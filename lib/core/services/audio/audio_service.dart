@@ -73,6 +73,11 @@ class AudioService {
   AudioPlayerState _state = const AudioPlayerState();
   AudioPlayerState get state => _state;
 
+  /// Texte complet du script en cours (pour pause/reprise).
+  String _fullScriptText = '';
+  /// Position caractère dans le texte (pour reprise après pause).
+  int _charPosition = 0;
+
   // Callback notifié à chaque changement d'état
   void Function(AudioPlayerState)? onStateChanged;
 
@@ -86,6 +91,26 @@ class AudioService {
     await _tts?.setPitch(0.9);
     await _tts?.setSpeechRate(0.45);
     await _tts?.setVolume(_state.voiceVolume);
+
+    // Suivi de progression
+    _tts?.setProgressHandler((String text, int start, int end, String word) {
+      _charPosition = end;
+      final totalChars = _fullScriptText.length;
+      final progress = totalChars > 0
+          ? Duration(seconds: (end / totalChars * 60).round())
+          : Duration.zero;
+      _state = _state.copyWith(position: progress);
+      _notify();
+    });
+
+    // Fin de lecture automatique
+    _tts?.setCompletionHandler(() {
+      if (_state.status == PlayerStatus.playing) {
+        _state = _state.copyWith(status: PlayerStatus.idle, position: Duration.zero);
+        _charPosition = 0;
+        _notify();
+      }
+    });
   }
 
   /// Démarre la lecture d'un script TTS + ambiances.
@@ -95,33 +120,54 @@ class AudioService {
   }) async {
     await stop();
 
+    _fullScriptText = scriptText;
+    _charPosition = 0;
+
     _state = _state.copyWith(
       status: PlayerStatus.playing,
       currentTitle: title,
+      position: Duration.zero,
+      duration: Duration(seconds: (scriptText.length / 15).round()),
     );
     _notify();
 
-    // Lancement du TTS
-    await _tts?.setVolume(_state.voiceVolume);
-    await _tts?.speak(scriptText);
+    await _speakFrom(0);
 
-    // Timer de progression
+    _startProgressTimer();
+  }
+
+  /// Parle une portion du texte depuis [start] caractère.
+  Future<void> _speakFrom(int start) async {
+    if (start >= _fullScriptText.length) return;
+    final remaining = _fullScriptText.substring(start);
+    await _tts?.setVolume(_state.voiceVolume);
+    await _tts?.speak(remaining);
+  }
+
+  /// Timer de progression approximative quand TTS ne donne pas de callback.
+  void _startProgressTimer() {
+    _progressTimer?.cancel();
     _progressTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      _tts?.isLanguageAvailable('fr-FR').then((_) {
-        // Note : flutter_tts n'expose pas la position directement
-        // On utilise un timer approximatif pour la progression
-      });
+      if (_state.status == PlayerStatus.playing) {
+        final elapsed = _state.position + const Duration(seconds: 1);
+        _state = _state.copyWith(position: elapsed);
+        _notify();
+      }
     });
   }
 
   /// Met en pause / reprend.
   Future<void> togglePause() async {
     if (_state.status == PlayerStatus.playing) {
+      // Stop TTS, garde la position caractère
       await _tts?.stop();
       _state = _state.copyWith(status: PlayerStatus.paused);
+      _progressTimer?.cancel();
     } else if (_state.status == PlayerStatus.paused) {
+      // Reprend depuis la position sauvegardée
       _state = _state.copyWith(status: PlayerStatus.playing);
-      // Le TTS ne supporte pas la reprise, on devra re-synthétiser
+      await _speakFrom(_charPosition);
+      _startProgressTimer();
     }
     _notify();
   }
@@ -134,6 +180,9 @@ class AudioService {
 
     await _tts?.stop();
     await _ambientPlayer?.stop();
+
+    _fullScriptText = '';
+    _charPosition = 0;
 
     _state = _state.copyWith(
       status: PlayerStatus.idle,
@@ -160,7 +209,7 @@ class AudioService {
 
     if (totalMs <= 0) return;
 
-    Timer(Duration(milliseconds: totalMs), () async {
+    _fadeOutTimer = Timer(Duration(milliseconds: totalMs), () async {
       _state = _state.copyWith(status: PlayerStatus.fadingOut);
       _notify();
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:somni_script_app/config/app_theme.dart';
+import 'package:somni_script_app/core/providers/navigation_provider.dart';
 import 'package:somni_script_app/features/generation/presentation/generation_provider.dart';
 
 /// Onglet 1 : Générateur IA
@@ -60,27 +61,13 @@ class _GenerationScreenState extends ConsumerState<GenerationScreen> {
             ),
           ),
 
-          // Bouton de génération
+          // Bouton de génération / écouter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SizedBox(
               width: double.infinity,
               height: 52,
-              child: FilledButton.icon(
-                onPressed: state.status == GenerationStatus.idle ||
-                        state.status == GenerationStatus.error
-                    ? _generate
-                    : null,
-                icon: state.status == GenerationStatus.idle ||
-                        state.status == GenerationStatus.error
-                    ? const Icon(Icons.auto_awesome)
-                    : const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                label: Text(_buttonLabel(state.status)),
-              ),
+              child: _buildActionButton(state),
             ),
           ),
 
@@ -159,20 +146,33 @@ class _GenerationScreenState extends ConsumerState<GenerationScreen> {
     );
   }
 
-  String _buttonLabel(GenerationStatus status) {
-    switch (status) {
-      case GenerationStatus.planning:
-        return 'Planification…';
-      case GenerationStatus.writing:
-        return 'Rédaction…';
-      case GenerationStatus.editing:
-        return 'Édition…';
-      case GenerationStatus.done:
-        return 'Prêt ✓';
-      case GenerationStatus.error:
-        return 'Réessayer';
+  Widget _buildActionButton(GenerationState state) {
+    switch (state.status) {
       case GenerationStatus.idle:
-        return 'Générer';
+      case GenerationStatus.error:
+        return FilledButton.icon(
+          onPressed: _generate,
+          icon: const Icon(Icons.auto_awesome),
+          label: const Text('Générer'),
+        );
+      case GenerationStatus.planning:
+      case GenerationStatus.writing:
+      case GenerationStatus.editing:
+        return FilledButton.icon(
+          onPressed: null,
+          icon: const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          label: const Text('Génération…'),
+        );
+      case GenerationStatus.done:
+        return FilledButton.icon(
+          onPressed: _listen,
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Écouter'),
+        );
     }
   }
 
@@ -183,5 +183,11 @@ class _GenerationScreenState extends ConsumerState<GenerationScreen> {
           userPrompt: prompt,
           isPodcast: _isPodcast,
         );
+  }
+
+  void _listen() {
+    // Basculer vers l'onglet Lecture — le provider pendingPlayback est déjà
+    // positionné par generation_provider.
+    ref.read(tabIndexProvider.notifier).state = 1;
   }
 }

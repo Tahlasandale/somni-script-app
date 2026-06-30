@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:somni_script_app/config/app_theme.dart';
 import 'package:somni_script_app/core/db/app_models.dart';
 import 'package:somni_script_app/core/providers/secure_storage_provider.dart';
@@ -154,6 +154,80 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // --- Section modèle ---
+          _SettingsSection(
+            title: 'Modèle Gemini',
+            child: Consumer(builder: (context, ref, _) {
+              final modelsAsync = ref.watch(availableGeminiModelsProvider);
+              final currentModelAsync = ref.watch(geminiModelNameProvider);
+              final currentModel = currentModelAsync.valueOrNull ?? '';
+
+              return modelsAsync.when(
+                loading: () => const SizedBox(
+                  height: 36,
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+                error: (_, _) => const Text(
+                  'Impossible de charger les modèles.\n'
+                  'Vérifie ta clé API.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                ),
+                data: (models) {
+                  if (models.isEmpty) {
+                    return const Text(
+                      'Aucun modèle trouvé. Vérifie ta clé API.',
+                      style:
+                          TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                    );
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    key: ValueKey(currentModel),
+                    initialValue: models.any((m) => m.shortName == currentModel)
+                        ? currentModel
+                        : null,
+                    dropdownColor: const Color(0xFF1A1A2E),
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 13,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: models.map((m) {
+                      return DropdownMenuItem(
+                        value: m.shortName,
+                        child: Text(m.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setGeminiModelName(ref, val);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Modèle changé : $val'),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    },
+                  );
+                },
+              );
+            }),
           ),
 
           const SizedBox(height: 16),

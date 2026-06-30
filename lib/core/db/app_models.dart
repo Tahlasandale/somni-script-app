@@ -1,4 +1,4 @@
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 
 part 'app_models.g.dart';
 
@@ -11,6 +11,7 @@ class UserConfig {
   String userId = 'default_user';
 
   String geminiApiKey = '';
+  String modelName = 'gemini-2.5-flash';
   DateTime lastModified = DateTime.now();
 }
 

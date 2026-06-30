@@ -18,6 +18,6 @@ class AppConstants {
   static const double fadeOutDurationSeconds = 30;
 
   // --- Gemini ---
-  static const String defaultModel = 'gemini-2.0-flash';
+  static const String defaultModel = 'gemini-2.5-flash';
   static const int maxChapters = 6;
 }

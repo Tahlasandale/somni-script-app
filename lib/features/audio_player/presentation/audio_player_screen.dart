@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:somni_script_app/config/app_theme.dart';
 import 'package:somni_script_app/core/constants.dart';
 import 'package:somni_script_app/core/providers/audio_provider.dart';
+import 'package:somni_script_app/core/providers/navigation_provider.dart';
 import 'package:somni_script_app/core/services/audio/audio_service.dart';
 
 /// Onglet 2 : Lecteur & Mixeur Immersif
@@ -16,6 +17,25 @@ class AudioPlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Écouter les scripts en attente et les lire automatiquement
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.listenManual(pendingPlaybackProvider, (prev, next) {
+        if (next == null) return;
+        final audioService = ref.read(audioServiceProvider);
+        audioService.play(
+          scriptText: next.script,
+          title: next.title,
+        );
+        // Consommé — on remet à null
+        ref.read(pendingPlaybackProvider.notifier).state = null;
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(audioPlayerStateProvider).value ??
@@ -134,7 +154,8 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen> {
           ),
           const SizedBox(height: 8),
 
-          _mixerSlider('Voix', state.voiceVolume, AppTheme.accentOrange, (v) {
+          _mixerSlider(
+              'Voix', state.voiceVolume, AppTheme.accentOrange, (v) {
             audioService.setVolume('voice', v);
           }),
           _mixerSlider(
@@ -144,10 +165,12 @@ class _AudioPlayerScreenState extends ConsumerState<AudioPlayerScreen> {
           _mixerSlider('Océan', state.oceanVolume, AppTheme.accentBlue, (v) {
             audioService.setVolume('ocean', v);
           }),
-          _mixerSlider('Pluie', state.rainVolume, const Color(0xFF607D8B), (v) {
+          _mixerSlider(
+              'Pluie', state.rainVolume, const Color(0xFF607D8B), (v) {
             audioService.setVolume('rain', v);
           }),
-          _mixerSlider('Lofi', state.lofiVolume, const Color(0xFFCE93D8), (v) {
+          _mixerSlider(
+              'Lofi', state.lofiVolume, const Color(0xFFCE93D8), (v) {
             audioService.setVolume('lofi', v);
           }),
         ],

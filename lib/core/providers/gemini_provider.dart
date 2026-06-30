@@ -4,6 +4,7 @@ import 'secure_storage_provider.dart';
 
 final geminiServiceProvider = FutureProvider<GeminiService?>((ref) async {
   final k = await ref.watch(geminiApiKeyProvider.future);
+  final model = await ref.watch(geminiModelNameProvider.future);
   if (k == null || k.isEmpty) return null;
-  return GeminiService(secretKey: k);
+  return GeminiService(secretKey: k, modelName: model);
 });

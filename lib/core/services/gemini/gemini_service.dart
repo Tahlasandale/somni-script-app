@@ -48,7 +48,7 @@ class Chapter {
 class GeminiService {
   final GenerativeModel _model;
 
-  GeminiService({required String secretKey, String modelName = 'gemini-2.0-flash'})
+  GeminiService({required String secretKey, String modelName = 'gemini-2.5-flash'})
       : _model = GenerativeModel(
           model: modelName,
           apiKey: secretKey,
