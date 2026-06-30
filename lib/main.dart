@@ -21,18 +21,25 @@ Future<void> main() async {
     ),
   );
 
-  // Initialise audio_service pour le background playback et la notification
-  // Le TTS est partagé avec le service UI via le provider
-  await AudioService.init(
-    builder: () => SomniAudioHandler(tts: FlutterTts()),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.somniscript.somni_script_app.playback',
-      androidNotificationChannelName: 'Lecture SomniScript',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-      androidNotificationIcon: 'mipmap/ic_launcher',
-    ),
-  );
+  // Initialise audio_service sans bloquer runApp.
+  // Si ça échoue (device incompatible, service indisponible),
+  // l'app s'affiche quand même — juste sans background playback.
+  try {
+    await AudioService.init(
+      builder: () => SomniAudioHandler(tts: FlutterTts()),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId:
+            'com.somniscript.somni_script_app.playback',
+        androidNotificationChannelName: 'Lecture SomniScript',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+        androidNotificationIcon: 'mipmap/ic_launcher',
+      ),
+    );
+  } catch (e) {
+    // Le background playback est optionnel
+    debugPrint('AudioService.init failed: $e');
+  }
 
   runApp(const ProviderScope(child: SomniScriptApp()));
 }
